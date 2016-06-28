@@ -38,16 +38,6 @@ trait IPRangeIterable
     }
 
     /**
-     *
-     *
-     * @return array
-     */
-    public function getNetworks()
-    {
-        // TODO:
-    }
-
-    /**
      * Check this range contains an IP or IPRangeIterator instance
      *
      * @param IP|IPRangeIterator $needle

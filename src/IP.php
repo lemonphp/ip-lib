@@ -201,7 +201,24 @@ class IP
      */
     public function next($step = 1)
     {
-        // TODO:
+        if ($step < 0) {
+            throw new \InvalidArgumentException('Step must greater than zero');
+        }
+
+        $unpacked = unpack('C*', $this->inAddr);
+
+        for ($i = 0; $i < $step; $i++) {
+            for ($byte = count($unpacked); $byte >= 0; --$byte) {
+                if ($unpacked[$byte] < 255) {
+                    $unpacked[$byte]++;
+                    break;
+                } else {
+                    $unpacked[$byte] = 0;
+                }
+            }
+        }
+
+        return new self(inet_ntop(call_user_func_array('pack', array_merge(['C*'], $unpacked))));
     }
 
     /**
@@ -212,7 +229,24 @@ class IP
      */
     public function prev($step = 1)
     {
-        // TODO:
+        if ($step < 0) {
+            throw new \InvalidArgumentException('Step must greater than zero');
+        }
+
+        $unpacked = unpack('C*', $this->inAddr);
+
+        for ($i = 0; $i < $step; $i++) {
+            for ($byte = count($unpacked); $byte >= 0; --$byte) {
+                if ($unpacked[$byte] == 0) {
+                    $unpacked[$byte] = 255;
+                } else {
+                    $unpacked[$byte]--;
+                    break;
+                }
+            }
+        }
+
+        return new self(inet_ntop(call_user_func_array('pack', array_merge(['C*'], $unpacked))));
     }
 
     /**
