@@ -1,0 +1,33 @@
+{
+    "name": "lemonphp/ip-lib",
+    "type": "library",
+    "description": "A library for working with IP address",
+    "keyworks": ["ip","network"],
+    "license": "MIT",
+    "homepage": "https://github.com/lemonphp/ip-lib",
+    "support": {
+        "issues": "https://github.com/lemonphp/ip-lib/issues",
+        "source": "https://github.com/lemonphp/ip-lib"
+    },
+    "authors": [
+        {
+            "name": "Oanh Nguyen",
+            "email": "oanhnn.bk@gmail.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Lemon\\Lib\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=5.5.9"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "~4.8",
+        "squizlabs/php_codesniffer": "^2.5"
+    },
+    "config": {
+        "preferred-install": "dist"
+    }
+}
