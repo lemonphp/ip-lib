@@ -69,6 +69,7 @@ class IP
     /**
      * @var string  Human readable format of ip
      */
+    protected $ip;
 
     /**
      * @var string  BIN format of ip
@@ -118,11 +119,10 @@ class IP
         } elseif (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
             $this->version = self::IP_V6;
         } else {
-            throw new \InvalidArgumentException("Invalid IP address format");
+            throw new \InvalidArgumentException('Invalid IP address format');
         }
 
         $this->inAddr = inet_pton($ip);
-        $this->ip = $ip;
     }
 
     /**
@@ -132,7 +132,7 @@ class IP
      */
     public function __toString()
     {
-        return $this->ip;
+        return inet_ntop($this->inAddr);
     }
 
     /**
@@ -276,7 +276,7 @@ class IP
     public function toHex()
     {
         if (null === $this->hex) {
-            $this->hex = '0x' . bin2hex($this->toInAddr());
+            $this->hex = '0x' . bin2hex($this->inAddr);
         }
 
         return $this->hex;
@@ -291,13 +291,9 @@ class IP
     {
         if (null === $this->numeric) {
             $numeric = 0;
-            if ($this->version === self::IP_V4) {
-                $numeric = ip2long($this->ip);
-            } else {
-                $octet = self::NUMBER_OCTETS_V6 - 1;
-                foreach ($chars = unpack('C*', $this->inAddr) as $char) {
-                    $numeric = bcadd($numeric, bcmul($char, bcpow(256, $octet--)));
-                }
+            $octets = $this->getNumberOctets() - 1;
+            foreach ($chars = unpack('C*', $this->inAddr) as $char) {
+                $numeric = bcadd($numeric, bcmul($char, bcpow(256, $octets--)));
             }
 
             $this->numeric = $numeric;
@@ -330,8 +326,8 @@ class IP
     /**
      * Binary safe ip comparison
      *
-     * @param IP $ip1
-     * @param IP $ip2
+     * @param IP|string $ip1
+     * @param IP|string $ip2
      * @return int &lt; 0 if <i>ip1</i> is less than
      * <i>ip2</i>; &gt; 0 if <i>ip1</i>
      * is greater than <i>ip2</i>, and 0 if they are
@@ -340,7 +336,66 @@ class IP
      */
     public static function cmp($ip1, $ip2)
     {
-        return strcmp($ip1->toInAddr(), $ip2->toInAddr());
+        foreach ($ips = [$ip1, $ip2] as $key => $ip) {
+            if (!($ip instanceof self)) {
+                $ips[$key] = self::parse($ip);
+            }
+        }
+
+        return strcmp($ips[0]->toInAddr(), $ips[1]->toInAddr());
+    }
+
+    /**
+     * Compress an IPv6 address
+     * Eg:
+     *     2001:0DB8:AC10:FE01:0000:0000:0000:0000 => 2001:0db8:ac10:fe01::
+     *     ::127.0.0.1 => ::7f00:1
+     *
+     * @param string $ip    A IPv6 address
+     * @return string       The compressed IPv6 address
+     * @throws \InvalidArgumentException if parameter is not IPv6 address
+     */
+    public static function compressIPv6($ip)
+    {
+        if (!($ip = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))) {
+            throw new \InvalidArgumentException();
+        }
+
+        $normal = inet_ntop(inet_pton($ip));
+
+        // Check IPv6 has notation
+        // https://tools.ietf.org/html/rfc2373#section-2.5.4
+        if (strpos($normal, '.') !== false) {
+            $octet = explode(':', $normal);
+            $part = explode('.', array_pop($octet), 4);
+
+            $octet[] = base_convert($part[0] * 256 + $part[1], 10, 16);
+            $octet[] = base_convert($part[2] * 256 + $part[3], 10, 16);
+
+            $normal = implode(':', $octet);
+        }
+
+        return $normal;
+    }
+
+    /**
+     * Expand an IPv6 address
+     *
+     * This will take an IPv6 address written in short form and expand it to include all zeros.
+     *
+     * @param  string  $ip A valid IPv6 address
+     * @return string  The expanded IPv6 address
+     * @throws \InvalidArgumentException if parameter is not IPv6 address
+     */
+    public static function expandIPv6($ip)
+    {
+        if (!($ip = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6))) {
+            throw new \InvalidArgumentException();
+        }
+
+        $hex = bin2hex(inet_pton($ip));
+
+        return implode(':', str_split($hex, 4));
     }
 
     /**
@@ -366,10 +421,10 @@ class IP
             return self::fromBin($ip);
         } elseif (is_numeric($ip)) {
             // TODO: numeric IPv6
-            return self::fromNumeric($ip);
+            return self::fromNumeric($ip, self::IP_V6);
         }
 
-        return new self($ip);
+        return new static($ip);
     }
 
     /**
@@ -387,14 +442,14 @@ class IP
     public static function fromBin($bin)
     {
         if (!preg_match('/^0b([0-1]{32}|[0-1]{128})$/', $bin)) {
-            throw new \InvalidArgumentException("Invalid binary IP address format");
+            throw new \InvalidArgumentException('Invalid binary IP address format');
         }
         $inAddr = '';
         foreach (array_map('bindec', str_split(substr($bin, 2), 8)) as $char) {
             $inAddr .= pack('C*', $char);
         }
 
-        return new self(inet_ntop($inAddr));
+        return new static(inet_ntop($inAddr));
     }
 
     /**
@@ -412,10 +467,10 @@ class IP
     public static function fromHex($hex)
     {
         if (!preg_match('/^0x([0-9a-fA-F]{8}|[0-9a-fA-F]{32})$/', $hex)) {
-            throw new \InvalidArgumentException("Invalid hexadecimal IP address format");
+            throw new \InvalidArgumentException('Invalid hexadecimal IP address format');
         }
 
-        return new self(inet_ntop(pack('H*', substr($hex, 2))));
+        return new static(inet_ntop(hex2bin(substr($hex, 2)))); // return new self(inet_ntop(pack('H*', substr($hex, 2))));
     }
 
     /**
@@ -432,22 +487,17 @@ class IP
      * @return \self
      * @throws \InvalidArgumentException
      */
-    public static function fromNumeric($num, $version = IP::IP_V4)
+    public static function fromNumeric($num, $version = self::IP_V4)
     {
-        if ($version === IP::IP_V4) {
-            $ip = new self(long2ip($num));
-        } else {
-            $binary = [];
-            for ($i = 0; $i < IP::NUMBER_OCTETS_V6; $i++) {
-                $binary[] = bcmod($num, 256);
-                $num = bcdiv($num, 256, 0);
-            }
-
-            $inAddr = call_user_func_array('pack', array_merge(['C*'], array_reverse($binary)));
-            $ip = new self(inet_ntop($inAddr));
+        $binary = [];
+        $octets = (self::IP_V4 === $version) ? self::NUMBER_OCTETS_V4 : self::NUMBER_OCTETS_V6;
+        for ($i = 0; $i < $octets; $i++) {
+            $binary[] = bcmod($num, 256);
+            $num = bcdiv($num, 256, 0);
         }
 
-        return $ip;
+        $inAddr = call_user_func_array('pack', array_merge(['C*'], array_reverse($binary)));
+        return new static(inet_ntop($inAddr));
     }
 
     /**
@@ -464,6 +514,6 @@ class IP
      */
     public static function fromInAddr($inAddr)
     {
-        return new self(inet_ntop($inAddr));
+        return new static(inet_ntop($inAddr));
     }
 }
